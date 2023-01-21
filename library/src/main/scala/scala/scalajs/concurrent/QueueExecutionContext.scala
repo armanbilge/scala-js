@@ -44,10 +44,22 @@ object QueueExecutionContext {
   }
 
   private final class PromisesExecutionContext extends ExecutionContextExecutor {
-    private val resolvedUnitPromise = js.Promise.resolve[Unit](())
+    private val queueMicrotask: js.Function1[js.Function1[Unit, Unit | js.Thenable[Unit]], Unit] = {
+      if (js.typeOf(js.Dynamic.global.queueMicrotask) == "function") {
+        js.Dynamic.global.queueMicrotask
+          .asInstanceOf[js.Function1[js.Function1[Unit, Unit | js.Thenable[Unit]], Unit]]
+      } else {
+        val resolvedUnitPromise = js.Promise.resolve[Unit](())
+
+        { task =>
+          resolvedUnitPromise.`then`(task)
+          ()
+        }
+      }
+    }
 
     def execute(runnable: Runnable): Unit = {
-      resolvedUnitPromise.`then` { (_: Unit) =>
+      queueMicrotask { (_: Unit) =>
         try {
           runnable.run()
         } catch {
